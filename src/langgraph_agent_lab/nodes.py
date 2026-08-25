@@ -11,7 +11,7 @@ LLM REQUIREMENT:
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel
 
@@ -24,8 +24,8 @@ from .state import AgentState, make_event
 class IntentClassification(BaseModel):
     """Structured output for route classification."""
 
-    route: str  # "simple" | "tool" | "missing_info" | "risky" | "error"
-    risk_level: str  # "high" | "low"
+    route: Literal["simple", "tool", "missing_info", "risky", "error"]
+    risk_level: Literal["high", "low"]
     reasoning: str  # brief justification for audit trail
 
 
@@ -61,7 +61,8 @@ def classify_node(state: AgentState) -> dict:
     prompt = (
         f"Classify this support request:\n\nQuery: {query}\n\n"
         f"Priority order (apply highest applicable):\n{priority_guide}\n\n"
-        "Respond with the route and risk_level."
+        "Return JSON matching the schema exactly. The route MUST be one of the exact values "
+        "simple, tool, missing_info, risky, or error; never invent a label or phrase."
     )
 
     # LLM call with structured output

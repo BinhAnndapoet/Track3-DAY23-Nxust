@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 class ScenarioMetric(BaseModel):
     scenario_id: str
+    thread_id: str = ""
     success: bool
     expected_route: str
     actual_route: str | None = None
@@ -21,6 +22,7 @@ class ScenarioMetric(BaseModel):
     approval_required: bool = False
     approval_observed: bool = False
     latency_ms: int = 0
+    checkpoint_history_entries: int = 0
     errors: list[str] = Field(default_factory=list)
 
 
@@ -31,10 +33,18 @@ class MetricsReport(BaseModel):
     total_retries: int
     total_interrupts: int
     resume_success: bool = False
+    checkpointer_kind: str = "none"
+    total_checkpoint_history_entries: int = 0
     scenario_metrics: list[ScenarioMetric]
 
 
-def metric_from_state(state: dict[str, Any], expected_route: str, approval_required: bool) -> ScenarioMetric:
+def metric_from_state(
+    state: dict[str, Any],
+    expected_route: str,
+    approval_required: bool,
+    checkpoint_history_entries: int = 0,
+    latency_ms: int = 0,
+) -> ScenarioMetric:
     events = state.get("events", []) or []
     errors = state.get("errors", []) or []
     actual_route = state.get("route")
@@ -47,6 +57,7 @@ def metric_from_state(state: dict[str, Any], expected_route: str, approval_requi
         success = success and approval is not None
     return ScenarioMetric(
         scenario_id=str(state.get("scenario_id", "unknown")),
+        thread_id=str(state.get("thread_id", "")),
         success=success,
         expected_route=expected_route,
         actual_route=actual_route,
@@ -55,11 +66,13 @@ def metric_from_state(state: dict[str, Any], expected_route: str, approval_requi
         interrupt_count=interrupt_count,
         approval_required=approval_required,
         approval_observed=approval is not None,
+        latency_ms=latency_ms,
+        checkpoint_history_entries=checkpoint_history_entries,
         errors=list(errors),
     )
 
 
-def summarize_metrics(items: list[ScenarioMetric]) -> MetricsReport:
+def summarize_metrics(items: list[ScenarioMetric], checkpointer_kind: str = "none") -> MetricsReport:
     if not items:
         raise ValueError("No scenario metrics to summarize")
     return MetricsReport(
@@ -69,6 +82,8 @@ def summarize_metrics(items: list[ScenarioMetric]) -> MetricsReport:
         total_retries=sum(item.retry_count for item in items),
         total_interrupts=sum(item.interrupt_count for item in items),
         resume_success=False,
+        checkpointer_kind=checkpointer_kind,
+        total_checkpoint_history_entries=sum(item.checkpoint_history_entries for item in items),
         scenario_metrics=items,
     )
 

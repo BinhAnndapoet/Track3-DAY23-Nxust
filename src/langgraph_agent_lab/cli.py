@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from time import perf_counter
 from pathlib import Path
 from typing import Annotated
 
@@ -33,9 +34,22 @@ def run_scenarios(
     for scenario in scenarios:
         state = initial_state(scenario)
         run_config = {"configurable": {"thread_id": state["thread_id"]}}
+        started_at = perf_counter()
         final_state = graph.invoke(state, config=run_config)
-        metrics.append(metric_from_state(final_state, scenario.expected_route.value, scenario.requires_approval))
-    report = summarize_metrics(metrics)
+        latency_ms = round((perf_counter() - started_at) * 1000)
+        history_entries = 0
+        if checkpointer is not None:
+            history_entries = sum(1 for _ in graph.get_state_history(run_config))
+        metrics.append(
+            metric_from_state(
+                final_state,
+                scenario.expected_route.value,
+                scenario.requires_approval,
+                checkpoint_history_entries=history_entries,
+                latency_ms=latency_ms,
+            )
+        )
+    report = summarize_metrics(metrics, checkpointer_kind=cfg.get("checkpointer", "memory"))
     write_metrics(report, output)
     if cfg.get("report_path"):
         write_report(report, cfg["report_path"])
